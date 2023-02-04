@@ -15,18 +15,18 @@ def get_args():
     parser.add_argument("--train", type=str, default="data/sst-train.txt")
     parser.add_argument("--dev", type=str, default="data/sst-dev.txt")
     parser.add_argument("--test", type=str, default="data/sst-test.txt")
-    parser.add_argument("--emb_file", type=str, default=None)
+    parser.add_argument("--emb_file", type=str, default='glove_42B_embed.npy')
     parser.add_argument("--emb_size", type=int, default=300)
     parser.add_argument("--hid_size", type=int, default=300)
-    parser.add_argument("--hid_layer", type=int, default=3)
+    parser.add_argument("--hid_layer", type=int, default=5)
     parser.add_argument("--word_drop", type=float, default=0.3)
     parser.add_argument("--emb_drop", type=float, default=0.333)
     parser.add_argument("--hid_drop", type=float, default=0.333)
     parser.add_argument("--pooling_method", type=str, default="avg", choices=["sum", "avg", "max"])
     parser.add_argument("--grad_clip", type=float, default=5.0)
-    parser.add_argument("--max_train_epoch", type=int, default=5)
+    parser.add_argument("--max_train_epoch", type=int, default=45)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--lrate", type=float, default=0.005)
+    parser.add_argument("--lrate", type=float, default=0.002)
     parser.add_argument("--lrate_decay", type=float, default=0)  # 0 means no decay!
     parser.add_argument("--mrate", type=float, default=0.85)
     parser.add_argument("--log_niter", type=int, default=100)
@@ -79,7 +79,23 @@ def pad_sentences(sents, pad_id):
     Return:
         aug_sents: list(list(int)), |s_1| == |s_i|, for s_i in sents
     """
-    raise NotImplementedError()
+    # check
+    max_len = 0
+    for s in sents:
+        if len(s) > max_len:
+            max_len = len(s)
+
+    aug_sents = []
+
+    for s in sents:
+        corrected_s = s
+        if len(s) < max_len:
+            diff_len = max_len - len(s)
+            corrected_s = s + [pad_id]*diff_len
+        aug_sents.append(corrected_s)
+
+    return aug_sents
+
 
 def compute_grad_norm(model, norm_type=2):
     """

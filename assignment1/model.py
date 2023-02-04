@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import zipfile
 import numpy as np
+import torch.nn.functional as Fun
 
 class BaseModel(nn.Module):
     def __init__(self, args, vocab, tag_size):
@@ -39,8 +40,18 @@ def load_embedding(vocab, emb_file, emb_size):
     Return:
         emb: (np.array), embedding matrix of size (|vocab|, emb_size) 
     """
-    raise NotImplementedError()
-
+    input_mod = np.load(emb_file ,allow_pickle=True).item() # check
+    output = []
+    for each_word in vocab.word2id:
+        if input_mod.get(each_word) is not None:
+            out = input_mod.get(each_word)
+            output.append(out)
+        else:
+            rand_out = np.random.random(emb_size)
+            output.append(rand_out)
+        
+    emb = np.array(output)    
+    return emb
 
 class DanModel(BaseModel):
     def __init__(self, args, vocab, tag_size):
@@ -52,23 +63,50 @@ class DanModel(BaseModel):
         if args.emb_file is not None:
             self.copy_embedding_from_numpy()
 
-    def define_model_parameters():
+    def define_model_parameters(self):
         """
         Define the model's parameters, e.g., embedding layer, feedforward layer.
         """
-        raise NotImplementedError()
+        vocab_len = len(self.vocab)
+        emb_size = self.args.emb_size
+        iter_len = self.args.hid_layer
+        hid_size = self.args.hid_size
+        drop = self.args.hid_drop
+        tag_size = self.tag_size
+        self.embed = nn.Embedding(vocab_len, emb_size)
+        ff = []
+        for idx in range(iter_len):
+            if idx == 0:
+                ff.append(nn.Linear(emb_size, hid_size))
+                ff.append(nn.Dropout(drop))
+            elif idx != iter_len - 1:
+                ff.append(nn.Linear(hid_size, hid_size))
+                ff.append(nn.Dropout(drop))
+            else:
+                ff.append(nn.Linear(hid_size, tag_size))
+        self.fc = nn.ModuleList(ff)
 
     def init_model_parameters(self):
         """
         Initialize the model's parameters by uniform sampling from a range [-v, v], e.g., v=0.08
         """
-        raise NotImplementedError()
+        for each_ff in self.fc:
+            if type(each_ff) == nn.Linear:
+                nn.init.uniform_(each_ff.weight, -0.08, 0.08)
 
-    def copy_embedding_from_numpy():
+    def copy_embedding_from_numpy(self):
         """
         Load pre-trained word embeddings from numpy.array to nn.embedding
         """
-        raise NotImplementedError()
+        # call function to get emb output
+        vocab = self.vocab
+        emb_file = self.args.emb_file
+        emb_size = self.args.emb_size
+        emb = load_embedding(vocab, emb_file, emb_size)
+        output = torch.from_numpy(emb)
+        self.embed.weight = nn.Parameter(output)
+        # self.embed.weight.data.copy_(output)
+        self.embed.weight.requires_grad = False
 
     def forward(self, x):
         """
@@ -81,4 +119,12 @@ class DanModel(BaseModel):
         Return:
             scores: (torch.FloatTensor), [batch_size, ntags]
         """
-        raise NotImplementedError()
+        emb_out = self.embed(x)
+        # emb_out = nn.Embedding(vocab_len, emb_size)
+        mean_out = emb_out.mean(dim=1) # check
+        for each_ff in self.fc:
+            if type(each_ff) == nn.Linear:
+                mean_out = Fun.relu(each_ff(mean_out))
+            else:
+                mean_out = each_ff(mean_out)
+        return mean_out
