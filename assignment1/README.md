@@ -1,4 +1,4 @@
-# Assignment 1
+# Sub Assignment 1
 by Junjie Hu
 
 This is an exercise in developing a text classifier based on neural network toolkit for NLP, part of University of Wisconsin-Madison's [CS 769: Advanced NLP](https://junjiehu.github.io/cs769-spring22/).
