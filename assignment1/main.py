@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument("--train", type=str, default="data/sst-train.txt")
     parser.add_argument("--dev", type=str, default="data/sst-dev.txt")
     parser.add_argument("--test", type=str, default="data/sst-test.txt")
-    parser.add_argument("--emb_file", type=str, default='glove_42B_embed.npy')
+    parser.add_argument("--emb_file", type=str, default='glove.6B.300.txt')
     parser.add_argument("--emb_size", type=int, default=300)
     parser.add_argument("--hid_size", type=int, default=300)
     parser.add_argument("--hid_layer", type=int, default=5)
@@ -178,6 +178,7 @@ def main():
     train_iter = 0
     train_loss = train_example = train_correct = 0
     best_records = (0, 0)  # [best_iter, best_accuracy]
+    model.train()
     for epoch in range(args.max_train_epoch):
         for batch in data_iter(train_data, batch_size=args.batch_size, shuffle=True):
             train_iter += 1
