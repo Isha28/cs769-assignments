@@ -15,18 +15,18 @@ def get_args():
     parser.add_argument("--train", type=str, default="data/sst-train.txt")
     parser.add_argument("--dev", type=str, default="data/sst-dev.txt")
     parser.add_argument("--test", type=str, default="data/sst-test.txt")
-    parser.add_argument("--emb_file", type=str, default='glove.6B.300.txt')
+    parser.add_argument("--emb_file", type=str, default='glove.6B.300d.txt')
     parser.add_argument("--emb_size", type=int, default=300)
     parser.add_argument("--hid_size", type=int, default=300)
-    parser.add_argument("--hid_layer", type=int, default=5)
-    parser.add_argument("--word_drop", type=float, default=0.3)
-    parser.add_argument("--emb_drop", type=float, default=0.333)
+    parser.add_argument("--hid_layer", type=int, default=3)
+    parser.add_argument("--word_drop", type=float, default=0)
+    parser.add_argument("--emb_drop", type=float, default=0)
     parser.add_argument("--hid_drop", type=float, default=0.333)
     parser.add_argument("--pooling_method", type=str, default="avg", choices=["sum", "avg", "max"])
-    parser.add_argument("--grad_clip", type=float, default=5.0)
-    parser.add_argument("--max_train_epoch", type=int, default=45)
+    parser.add_argument("--grad_clip", type=float, default=5)
+    parser.add_argument("--max_train_epoch", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--lrate", type=float, default=0.002)
+    parser.add_argument("--lrate", type=float, default=0.005)
     parser.add_argument("--lrate_decay", type=float, default=0)  # 0 means no decay!
     parser.add_argument("--mrate", type=float, default=0.85)
     parser.add_argument("--log_niter", type=int, default=100)
@@ -183,6 +183,7 @@ def main():
         for batch in data_iter(train_data, batch_size=args.batch_size, shuffle=True):
             train_iter += 1
 
+            model.train()
             X = pad_sentences(batch[0], word_vocab['<pad>'])
             X = torch.LongTensor(X).to(device)
             Y = torch.LongTensor(batch[1]).to(device)

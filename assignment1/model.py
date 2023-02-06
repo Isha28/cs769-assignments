@@ -40,7 +40,15 @@ def load_embedding(vocab, emb_file, emb_size):
     Return:
         emb: (np.array), embedding matrix of size (|vocab|, emb_size) 
     """
-    input_mod = np.load(emb_file ,allow_pickle=True).item() # check
+
+    input_mod = {}
+    output = np.zeros((len(vocab), emb_size), dtype=np.float64)
+    with open(emb_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line_elements = line.split()
+            embedding_values = np.array(line_elements[1:], dtype=np.float64)
+            input_mod[line_elements[0]] = embedding_values
+
     output = []
     for each_word in vocab.word2id:
         if input_mod.get(each_word) is not None:
@@ -49,13 +57,17 @@ def load_embedding(vocab, emb_file, emb_size):
         else:
             rand_out = np.random.random(emb_size)
             output.append(rand_out)
-        
-    emb = np.array(output)    
-    return emb
+
+    return output
+
 
 class DanModel(BaseModel):
     def __init__(self, args, vocab, tag_size):
         super(DanModel, self).__init__(args, vocab, tag_size)
+        
+        self.n_vocab = len(vocab)
+        self.n_embed = args.emb_size
+
         self.define_model_parameters()
         self.init_model_parameters()
 
@@ -67,46 +79,41 @@ class DanModel(BaseModel):
         """
         Define the model's parameters, e.g., embedding layer, feedforward layer.
         """
-        vocab_len = len(self.vocab)
-        emb_size = self.args.emb_size
-        iter_len = self.args.hid_layer
-        hid_size = self.args.hid_size
-        drop = self.args.hid_drop
-        tag_size = self.tag_size
-        self.embed = nn.Embedding(vocab_len, emb_size)
-        ff = []
-        for idx in range(iter_len):
-            if idx == 0:
-                ff.append(nn.Linear(emb_size, hid_size))
-                ff.append(nn.Dropout(drop))
-            elif idx != iter_len - 1:
-                ff.append(nn.Linear(hid_size, hid_size))
-                ff.append(nn.Dropout(drop))
-            else:
-                ff.append(nn.Linear(hid_size, tag_size))
-        self.fc = nn.ModuleList(ff)
+        self.embedding = torch.nn.Embedding(num_embeddings=self.n_vocab, embedding_dim=self.n_embed,padding_idx=self.vocab['<pad>'])
+
+        self.fc1 = nn.Linear(self.n_embed, self.args.hid_size)
+        self.z1 = nn.LeakyReLU(0.2)
+        self.d1 = nn.Dropout(p=self.args.hid_drop)
+
+        self.fc2 = nn.Linear(self.args.hid_size,self.args.hid_size)
+        self.z2 = nn.LeakyReLU(0.2)
+        self.d2 = nn.Dropout(p=self.args.hid_drop)
+
+        self.fc3 = nn.Linear(self.args.hid_size,self.args.hid_size)
+        self.z3 = nn.LeakyReLU(0.2)
+        self.d3 = nn.Dropout(p=self.args.hid_drop)
+
+
+        self.final = nn.Linear(self.args.hid_size,self.tag_size)
+
 
     def init_model_parameters(self):
         """
         Initialize the model's parameters by uniform sampling from a range [-v, v], e.g., v=0.08
         """
-        for each_ff in self.fc:
-            if type(each_ff) == nn.Linear:
-                nn.init.uniform_(each_ff.weight, -0.08, 0.08)
+        lower_bound = -0.08
+        upper_bound = 0.08
+        for name, param in self.named_parameters():
+            torch.nn.init.uniform_(param, lower_bound, upper_bound)
+
 
     def copy_embedding_from_numpy(self):
         """
         Load pre-trained word embeddings from numpy.array to nn.embedding
         """
-        # call function to get emb output
-        vocab = self.vocab
-        emb_file = self.args.emb_file
-        emb_size = self.args.emb_size
-        emb = load_embedding(vocab, emb_file, emb_size)
-        output = torch.from_numpy(emb)
-        self.embed.weight = nn.Parameter(output)
-        # self.embed.weight.data.copy_(output)
-        self.embed.weight.requires_grad = False
+        emb_file_load = load_embedding(self.vocab, self.args.emb_file, self.args.emb_size)
+        self.embedding.weight = nn.Parameter(torch.tensor(emb_file_load, dtype=torch.float32))
+
 
     def forward(self, x):
         """
@@ -119,12 +126,25 @@ class DanModel(BaseModel):
         Return:
             scores: (torch.FloatTensor), [batch_size, ntags]
         """
-        emb_out = self.embed(x)
-        # emb_out = nn.Embedding(vocab_len, emb_size)
-        mean_out = emb_out.mean(dim=1) # check
-        for each_ff in self.fc:
-            if type(each_ff) == nn.Linear:
-                mean_out = Fun.relu(each_ff(mean_out))
-            else:
-                mean_out = each_ff(mean_out)
-        return mean_out
+        out = torch.count_nonzero(x,dim=1).to(torch.float)
+        out = out.unsqueeze(-1).expand(-1,self.args.emb_size)+1e-5
+
+        x = self.embedding(x)
+        x = torch.sum(x,1)
+        x = torch.div(x,out)
+
+        if self.args.emb_drop!=0:
+            x = self.embdrop(x)
+
+        x = self.fc1(x)
+        x = self.z1(x)
+
+        x = self.d1(x)
+
+        x = self.fc2(x)
+        x = self.z2(x)
+
+        x = self.d2(x)
+
+        x = self.final(x)
+        return x
